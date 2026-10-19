@@ -12,16 +12,13 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Custom CSS for modern styling, shadows, and responsive cards
+# Custom CSS styling with elevated card structures and box shadows
 st.markdown(
     """
     <style>
-    /* Main Background and Text Settings */
     .main {
         background-color: #f8f9fa;
     }
-    
-    /* Header Card */
     .header-card {
         background: linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%);
         padding: 2.5rem;
@@ -40,8 +37,6 @@ st.markdown(
         font-size: 1.1rem;
         opacity: 0.9;
     }
-
-    /* Container Box Styling with Box Shadows */
     div[data-testid="stForm"] {
         background-color: #ffffff;
         padding: 2rem;
@@ -49,8 +44,6 @@ st.markdown(
         box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
         border: 1px solid #e5e7eb;
     }
-
-    /* Result Card Styling */
     .result-card {
         background: #ffffff;
         border-left: 6px solid #10b981;
@@ -69,8 +62,6 @@ st.markdown(
         font-weight: 800;
         color: #10b981;
     }
-
-    /* Submit Button Custom Styling */
     div[data-testid="stForm"] button {
         background-color: #4f46e5 !important;
         color: white !important;
@@ -89,10 +80,10 @@ st.markdown(
     }
     </style>
 """,
-    unsafe_allow_html=unsafe_allow_html,
+    unsafe_allow_html=True,
 )
 
-# Header Section
+# Render main page title header
 st.markdown(
     """
     <div class="header-card">
@@ -104,12 +95,12 @@ st.markdown(
 )
 
 
-# Function to load model safely
+# Function to load model with caching
 @st.cache_resource
 def load_model(file_path="model.pkl"):
     if not os.path.exists(file_path):
         st.error(
-            f"Model file `{file_path}` not found. Please place your trained `.pkl` file in the project directory."
+            f"Model file `{file_path}` not found in the root directory. Please verify your file structure."
         )
         return None
     with open(file_path, "rb") as f:
@@ -119,11 +110,10 @@ def load_model(file_path="model.pkl"):
 
 model = load_model("model.pkl")
 
-# Main Form Container
+# Main Form Interface
 with st.form("prediction_form"):
     st.subheader("📋 Input Features")
 
-    # Arrange features into multi-column layout
     col1, col2, col3 = st.columns(3)
 
     with col1:
@@ -183,13 +173,12 @@ with st.form("prediction_form"):
     st.markdown("<br>", unsafe_allow_html=True)
     submit_button = st.form_submit_button(label="🚀 Generate Prediction")
 
-# Handle Form Submission and Prediction
+# Process inputs and output prediction on submit
 if submit_button:
     if model is None:
-        st.warning("Prediction unavailable: Model is not loaded.")
+        st.warning("Prediction skipped: Model file could not be loaded.")
     else:
-        # Preprocess / Encode categorical inputs to match training requirements
-        # Adjust mapping standard as per your model preprocessing logic
+        # Categorical variable mapping (Adjust keys/values to match training script schema)
         gender_map = {"Male": 0, "Female": 1, "Other": 2}
         course_map = {"Engineering": 0, "Science": 1, "Arts": 2, "Commerce": 3}
         internet_map = {"No": 0, "Yes": 1}
@@ -207,9 +196,7 @@ if submit_button:
         }
         exam_difficulty_map = {"Easy": 0, "Moderate": 1, "Hard": 2}
 
-        # Build feature vector matching: [age, gender, course, study_hours, class_attendance,
-        #                                internet_access, sleep_hours, sleep_quality, study_method,
-        #                                facility_rating, exam_difficulty]
+        # Build feature vector input array
         features = np.array(
             [
                 [
@@ -231,17 +218,17 @@ if submit_button:
         try:
             prediction = model.predict(features)[0]
 
-            # Display prediction in styled result card
+            # Display formatted output
             st.markdown(
                 f"""
                 <div class="result-card">
-                    <h2>Predicted Result</h2>
+                    <h2>Predicted Exam Score</h2>
                     <div class="result-value">{prediction:.2f}</div>
-                    <p style="color: #6b7280; margin-top: 0.5rem;">Estimated score based on support vector regression analysis.</p>
+                    <p style="color: #6b7280; margin-top: 0.5rem;">Value calculated using Support Vector Regression model.</p>
                 </div>
             """,
                 unsafe_allow_html=True,
             )
 
-        except Exception as e:
-            st.error(f"Error executing prediction: {e}")
+        except Exception as err:
+            st.error(f"Error executing SVR model prediction: {err}")
