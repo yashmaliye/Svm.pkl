@@ -5,7 +5,7 @@ from flask import Flask, render_template_string, request
 
 app = Flask(__name__)
 
-# Load the trained SVR model
+# Path to trained SVR model
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "model.pkl")
 
 model = None
@@ -13,7 +13,6 @@ if os.path.exists(MODEL_PATH):
     with open(MODEL_PATH, "rb") as f:
         model = pickle.load(f)
 
-# HTML Template with styling, drop shadows, and responsive layout
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -98,7 +97,6 @@ HTML_TEMPLATE = """
             border: 1px solid #D1D5DB;
             border-radius: 8px;
             font-size: 0.95rem;
-            transition: all 0.2s ease;
             outline: none;
             background-color: #FAFAFA;
         }
@@ -120,16 +118,11 @@ HTML_TEMPLATE = """
             border: none;
             border-radius: 8px;
             cursor: pointer;
-            transition: background-color 0.2s ease, transform 0.1s ease;
             box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.3);
         }
 
         .btn-submit:hover {
             background-color: var(--primary-hover);
-        }
-
-        .btn-submit:active {
-            transform: scale(0.99);
         }
 
         .result-box {
@@ -139,7 +132,6 @@ HTML_TEMPLATE = """
             background: #EEF2FF;
             border: 1px solid #C7D2FE;
             text-align: center;
-            box-shadow: 0 4px 12px rgba(79, 70, 229, 0.08);
         }
 
         .result-box h2 {
@@ -253,14 +245,9 @@ def index():
 
     if request.method == "POST":
         if model is None:
-            error = "Model file ('model.pkl') not found. Please upload it to your deployment directory."
+            error = "Model file ('model.pkl') not found. Please ensure it is uploaded in the root directory."
         else:
             try:
-                # Features extracted in exact feature order from PKL metadata:
-                # ['age', 'gender', 'course', 'study_hours', 'class_attendance', 
-                #  'internet_access', 'sleep_hours', 'sleep_quality', 'study_method', 
-                #  'facility_rating', 'exam_difficulty']
-                
                 features = [
                     float(request.form.get("age", 0)),
                     float(request.form.get("gender", 0)),
