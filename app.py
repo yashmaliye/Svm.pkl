@@ -1,234 +1,288 @@
 import os
 import pickle
 import numpy as np
-import pandas as pd
-import streamlit as st
+from flask import Flask, render_template_string, request
 
-# Set page configuration
-st.set_page_config(
-    page_title="Student Performance Predictor",
-    page_icon="🎓",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
+app = Flask(__name__)
 
-# Custom CSS styling with elevated card structures and box shadows
-st.markdown(
-    """
-    <style>
-    .main {
-        background-color: #f8f9fa;
-    }
-    .header-card {
-        background: linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%);
-        padding: 2.5rem;
-        border-radius: 16px;
-        color: white;
-        text-align: center;
-        box-shadow: 0 10px 25px -5px rgba(79, 70, 229, 0.4), 0 8px 10px -6px rgba(79, 70, 229, 0.2);
-        margin-bottom: 2rem;
-    }
-    .header-card h1 {
-        color: white !important;
-        font-weight: 700;
-        margin-bottom: 0.5rem;
-    }
-    .header-card p {
-        font-size: 1.1rem;
-        opacity: 0.9;
-    }
-    div[data-testid="stForm"] {
-        background-color: #ffffff;
-        padding: 2rem;
-        border-radius: 16px;
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-        border: 1px solid #e5e7eb;
-    }
-    .result-card {
-        background: #ffffff;
-        border-left: 6px solid #10b981;
-        padding: 1.5rem;
-        border-radius: 12px;
-        box-shadow: 0 10px 20px rgba(0,0,0,0.08);
-        margin-top: 1.5rem;
-        text-align: center;
-    }
-    .result-card h2 {
-        color: #111827;
-        margin-bottom: 0.2rem;
-    }
-    .result-value {
-        font-size: 2.5rem;
-        font-weight: 800;
-        color: #10b981;
-    }
-    div[data-testid="stForm"] button {
-        background-color: #4f46e5 !important;
-        color: white !important;
-        border-radius: 8px !important;
-        padding: 0.6rem 2rem !important;
-        font-weight: 600 !important;
-        border: none !important;
-        box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.3) !important;
-        transition: all 0.2s ease-in-out !important;
-        width: 100% !important;
-    }
-    div[data-testid="stForm"] button:hover {
-        background-color: #4338ca !important;
-        box-shadow: 0 6px 12px -2px rgba(79, 70, 229, 0.5) !important;
-        transform: translateY(-1px);
-    }
-    </style>
-""",
-    unsafe_allow_html=True,
-)
+# Load the trained SVR model
+MODEL_PATH = os.path.join(os.path.dirname(__file__), "model.pkl")
 
-# Render main page title header
-st.markdown(
-    """
-    <div class="header-card">
-        <h1>🎓 Student Performance Prediction</h1>
-        <p>Enter the student parameters below to predict the estimated exam performance index.</p>
-    </div>
-""",
-    unsafe_allow_html=True,
-)
-
-
-# Function to load model with caching
-@st.cache_resource
-def load_model(file_path="model.pkl"):
-    if not os.path.exists(file_path):
-        st.error(
-            f"Model file `{file_path}` not found in the root directory. Please verify your file structure."
-        )
-        return None
-    with open(file_path, "rb") as f:
+model = None
+if os.path.exists(MODEL_PATH):
+    with open(MODEL_PATH, "rb") as f:
         model = pickle.load(f)
-    return model
 
-
-model = load_model("model.pkl")
-
-# Main Form Interface
-with st.form("prediction_form"):
-    st.subheader("📋 Input Features")
-
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        age = st.number_input(
-            "Age", min_value=10, max_value=100, value=20, step=1
-        )
-        gender = st.selectbox("Gender", options=["Male", "Female", "Other"])
-        course = st.selectbox(
-            "Course", options=["Engineering", "Science", "Arts", "Commerce"]
-        )
-        study_hours = st.number_input(
-            "Study Hours per Week",
-            min_value=0.0,
-            max_value=100.0,
-            value=15.0,
-            step=0.5,
-        )
-
-    with col2:
-        class_attendance = st.slider(
-            "Class Attendance (%)",
-            min_value=0.0,
-            max_value=100.0,
-            value=85.0,
-            step=1.0,
-        )
-        internet_access = st.selectbox(
-            "Internet Access", options=["Yes", "No"]
-        )
-        sleep_hours = st.number_input(
-            "Sleep Hours per Day",
-            min_value=0.0,
-            max_value=24.0,
-            value=7.0,
-            step=0.5,
-        )
-        sleep_quality = st.select_slider(
-            "Sleep Quality",
-            options=["Poor", "Average", "Good", "Excellent"],
-            value="Good",
-        )
-
-    with col3:
-        study_method = st.selectbox(
-            "Study Method",
-            options=["Self Study", "Group Study", "Online Lectures", "Tutor"],
-        )
-        facility_rating = st.slider(
-            "Facility Rating (1-5)", min_value=1, max_value=5, value=3, step=1
-        )
-        exam_difficulty = st.select_slider(
-            "Exam Difficulty",
-            options=["Easy", "Moderate", "Hard"],
-            value="Moderate",
-        )
-
-    st.markdown("<br>", unsafe_allow_html=True)
-    submit_button = st.form_submit_button(label="🚀 Generate Prediction")
-
-# Process inputs and output prediction on submit
-if submit_button:
-    if model is None:
-        st.warning("Prediction skipped: Model file could not be loaded.")
-    else:
-        # Categorical variable mapping (Adjust keys/values to match training script schema)
-        gender_map = {"Male": 0, "Female": 1, "Other": 2}
-        course_map = {"Engineering": 0, "Science": 1, "Arts": 2, "Commerce": 3}
-        internet_map = {"No": 0, "Yes": 1}
-        sleep_quality_map = {
-            "Poor": 0,
-            "Average": 1,
-            "Good": 2,
-            "Excellent": 3,
+# HTML Template with styling, drop shadows, and responsive layout
+HTML_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Exam Score Predictor</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #4F46E5;
+            --primary-hover: #4338CA;
+            --bg: #F3F4F6;
+            --card-bg: #FFFFFF;
+            --text: #1F2937;
+            --text-light: #6B7280;
         }
-        study_method_map = {
-            "Self Study": 0,
-            "Group Study": 1,
-            "Online Lectures": 2,
-            "Tutor": 3,
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
         }
-        exam_difficulty_map = {"Easy": 0, "Moderate": 1, "Hard": 2}
 
-        # Build feature vector input array
-        features = np.array(
-            [
-                [
-                    age,
-                    gender_map[gender],
-                    course_map[course],
-                    study_hours,
-                    class_attendance,
-                    internet_map[internet_access],
-                    sleep_hours,
-                    sleep_quality_map[sleep_quality],
-                    study_method_map[study_method],
-                    facility_rating,
-                    exam_difficulty_map[exam_difficulty],
-                ]
-            ]
-        )
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 2rem 1rem;
+        }
 
-        try:
-            prediction = model.predict(features)[0]
+        .container {
+            background: var(--card-bg);
+            max-width: 750px;
+            width: 100%;
+            padding: 2.5rem;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+        }
 
-            # Display formatted output
-            st.markdown(
-                f"""
-                <div class="result-card">
-                    <h2>Predicted Exam Score</h2>
-                    <div class="result-value">{prediction:.2f}</div>
-                    <p style="color: #6b7280; margin-top: 0.5rem;">Value calculated using Support Vector Regression model.</p>
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .header h1 {
+            font-size: 1.875rem;
+            font-weight: 700;
+            color: var(--text);
+            margin-bottom: 0.5rem;
+        }
+
+        .header p {
+            color: var(--text-light);
+            font-size: 0.95rem;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1.25rem;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group label {
+            font-size: 0.875rem;
+            font-weight: 600;
+            margin-bottom: 0.4rem;
+            color: var(--text);
+        }
+
+        .form-group input, .form-group select {
+            padding: 0.65rem 0.85rem;
+            border: 1px solid #D1D5DB;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            transition: all 0.2s ease;
+            outline: none;
+            background-color: #FAFAFA;
+        }
+
+        .form-group input:focus, .form-group select:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
+            background-color: #FFFFFF;
+        }
+
+        .btn-submit {
+            grid-column: 1 / -1;
+            margin-top: 1rem;
+            padding: 0.85rem;
+            background-color: var(--primary);
+            color: white;
+            font-size: 1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s ease, transform 0.1s ease;
+            box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.3);
+        }
+
+        .btn-submit:hover {
+            background-color: var(--primary-hover);
+        }
+
+        .btn-submit:active {
+            transform: scale(0.99);
+        }
+
+        .result-box {
+            margin-top: 2rem;
+            padding: 1.25rem;
+            border-radius: 12px;
+            background: #EEF2FF;
+            border: 1px solid #C7D2FE;
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(79, 70, 229, 0.08);
+        }
+
+        .result-box h2 {
+            font-size: 1.1rem;
+            color: var(--primary-hover);
+            margin-bottom: 0.25rem;
+        }
+
+        .result-box .score {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .error-box {
+            margin-top: 1.5rem;
+            padding: 1rem;
+            background-color: #FEE2E2;
+            border: 1px solid #FCA5A5;
+            color: #991B1B;
+            border-radius: 8px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Student Performance Predictor</h1>
+            <p>Input student metrics to estimate expected score using the SVR model.</p>
+        </div>
+
+        <form action="/" method="POST">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="age">Age</label>
+                    <input type="number" id="age" name="age" step="any" required placeholder="e.g. 20">
                 </div>
-            """,
-                unsafe_allow_html=True,
-            )
+                <div class="form-group">
+                    <label for="gender">Gender</label>
+                    <select id="gender" name="gender" required>
+                        <option value="0">Female</option>
+                        <option value="1">Male</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="course">Course Code/ID</label>
+                    <input type="number" id="course" name="course" step="any" required placeholder="e.g. 1">
+                </div>
+                <div class="form-group">
+                    <label for="study_hours">Study Hours / Week</label>
+                    <input type="number" id="study_hours" name="study_hours" step="any" required placeholder="e.g. 15">
+                </div>
+                <div class="form-group">
+                    <label for="class_attendance">Class Attendance (%)</label>
+                    <input type="number" id="class_attendance" name="class_attendance" step="any" required placeholder="e.g. 85">
+                </div>
+                <div class="form-group">
+                    <label for="internet_access">Internet Access</label>
+                    <select id="internet_access" name="internet_access" required>
+                        <option value="1">Yes</option>
+                        <option value="0">No</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="sleep_hours">Sleep Hours / Night</label>
+                    <input type="number" id="sleep_hours" name="sleep_hours" step="any" required placeholder="e.g. 7">
+                </div>
+                <div class="form-group">
+                    <label for="sleep_quality">Sleep Quality (1-5)</label>
+                    <input type="number" id="sleep_quality" name="sleep_quality" step="any" required placeholder="e.g. 4">
+                </div>
+                <div class="form-group">
+                    <label for="study_method">Study Method ID</label>
+                    <input type="number" id="study_method" name="study_method" step="any" required placeholder="e.g. 2">
+                </div>
+                <div class="form-group">
+                    <label for="facility_rating">Facility Rating (1-5)</label>
+                    <input type="number" id="facility_rating" name="facility_rating" step="any" required placeholder="e.g. 3">
+                </div>
+                <div class="form-group">
+                    <label for="exam_difficulty">Exam Difficulty (1-5)</label>
+                    <input type="number" id="exam_difficulty" name="exam_difficulty" step="any" required placeholder="e.g. 3">
+                </div>
 
-        except Exception as err:
-            st.error(f"Error executing SVR model prediction: {err}")
+                <button type="submit" class="btn-submit">Predict Performance Score</button>
+            </div>
+        </form>
+
+        {% if prediction %}
+        <div class="result-box">
+            <h2>Predicted Score</h2>
+            <div class="score">{{ prediction }}</div>
+        </div>
+        {% endif %}
+
+        {% if error %}
+        <div class="error-box">
+            {{ error }}
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>
+"""
+
+@app.route("/", methods=["GET", "POST"])
+def index():
+    prediction = None
+    error = None
+
+    if request.method == "POST":
+        if model is None:
+            error = "Model file ('model.pkl') not found. Please upload it to your deployment directory."
+        else:
+            try:
+                # Features extracted in exact feature order from PKL metadata:
+                # ['age', 'gender', 'course', 'study_hours', 'class_attendance', 
+                #  'internet_access', 'sleep_hours', 'sleep_quality', 'study_method', 
+                #  'facility_rating', 'exam_difficulty']
+                
+                features = [
+                    float(request.form.get("age", 0)),
+                    float(request.form.get("gender", 0)),
+                    float(request.form.get("course", 0)),
+                    float(request.form.get("study_hours", 0)),
+                    float(request.form.get("class_attendance", 0)),
+                    float(request.form.get("internet_access", 0)),
+                    float(request.form.get("sleep_hours", 0)),
+                    float(request.form.get("sleep_quality", 0)),
+                    float(request.form.get("study_method", 0)),
+                    float(request.form.get("facility_rating", 0)),
+                    float(request.form.get("exam_difficulty", 0)),
+                ]
+                
+                input_array = np.array([features])
+                pred_val = model.predict(input_array)[0]
+                prediction = f"{pred_val:.2f}"
+            except Exception as e:
+                error = f"Error processing prediction: {str(e)}"
+
+    return render_template_string(HTML_TEMPLATE, prediction=prediction, error=error)
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
